@@ -56,14 +56,17 @@ app.post('/comments', async (req, res) => {
 
     await page.waitForTimeout(7000);
 
-    // tenta fechar popup/login wall
+    // fecha popup/login wall
     try {
 
-      const buttons = await page.$$('button');
+      const popupButtons = await page.$$(
+        'button, div[role="button"]'
+      );
 
-      for (const button of buttons) {
+      for (const button of popupButtons) {
 
-        const text = await button.innerText();
+        const text =
+          await button.innerText();
 
         if (
           text.includes('Agora não') ||
@@ -86,49 +89,74 @@ app.post('/comments', async (req, res) => {
     }
 
     // carrega mais comentários
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 120; i++) {
 
       try {
 
-        const buttons = await page.$$('button');
+        const buttons = await page.$$(
+          'button, div[role="button"]'
+        );
+
+        console.log(
+          'Botões encontrados:',
+          buttons.length
+        );
 
         let clicked = false;
 
         for (const button of buttons) {
 
-          const text =
-            await button.innerText();
+          try {
 
-          if (
-            text.includes(
-              'Ver mais comentários'
-            ) ||
-            text.includes(
-              'View more comments'
-            ) ||
-            text.includes(
-              'Load more comments'
-            )
-          ) {
+            const text =
+              await button.innerText();
 
             console.log(
-              'Carregando mais comentários'
+              'Texto botão:',
+              text
             );
 
-            await button.click();
+            if (
+              text.includes(
+                'Ver mais comentários'
+              ) ||
+              text.includes(
+                'View more comments'
+              ) ||
+              text.includes(
+                'Load more comments'
+              ) ||
+              text.includes(
+                'View all comments'
+              ) ||
+              text.includes(
+                'Mais comentários'
+              ) ||
+              text.includes(
+                'See more comments'
+              )
+            ) {
 
-            clicked = true;
+              console.log(
+                'Carregando mais comentários'
+              );
 
-            await page.waitForTimeout(2500);
+              await button.click();
 
-            break;
-          }
+              clicked = true;
+
+              await page.waitForTimeout(3000);
+
+              break;
+            }
+
+          } catch (e) {}
         }
 
         // scroll ajuda no lazy loading
-        await page.mouse.wheel(0, 5000);
+        await page.mouse.wheel(0, 7000);
 
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(2000);
 
         if (!clicked) {
 
@@ -156,49 +184,74 @@ app.post('/comments', async (req, res) => {
 
     console.log('Página carregada');
 
-    console.log(html.substring(0, 5000));
+    console.log(
+      html.substring(0, 5000)
+    );
 
-    // captura comentários
+    // captura comentários reais
     const comments = await page.evaluate(() => {
 
       const results = [];
 
-      const spans =
-        document.querySelectorAll('span');
+      const commentBlocks =
+        document.querySelectorAll('ul ul');
 
-      spans.forEach(span => {
+      commentBlocks.forEach(block => {
 
-        const text =
-          span.innerText?.trim();
+        try {
 
-        if (
-          text &&
-          text.length > 3 &&
-          text.length < 300 &&
-          !text.includes('Curtir') &&
-          !text.includes('Reply') &&
-          !text.includes('Responder') &&
-          !text.includes('Seguir') &&
-          !text.includes('Following') &&
-          !text.includes('Instagram') &&
-          !text.includes('Meta') &&
-          !text.includes('Threads') &&
-          !text.includes('Ver tradução') &&
-          !text.includes('See translation')
-        ) {
+          const usernameElement =
+            block.querySelector('h3');
 
-          results.push({
-            username: 'usuario',
-            text
+          const spans =
+            block.querySelectorAll('span');
+
+          const username =
+            usernameElement
+              ?.innerText
+              ?.trim();
+
+          let commentText = '';
+
+          spans.forEach(span => {
+
+            const text =
+              span.innerText?.trim();
+
+            if (
+              text &&
+              text !== username &&
+              text.length >
+                commentText.length
+            ) {
+
+              commentText = text;
+            }
           });
-        }
+
+          if (
+            username &&
+            commentText &&
+            commentText.length > 1
+          ) {
+
+            results.push({
+              username,
+              text: commentText
+            });
+          }
+
+        } catch (e) {}
       });
 
       // remove duplicados
       const unique = results.filter(
         (item, index, self) =>
           index === self.findIndex(
-            t => t.text === item.text
+            t =>
+              t.username ===
+                item.username &&
+              t.text === item.text
           )
       );
 
@@ -234,7 +287,8 @@ app.post('/comments', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+  process.env.PORT || 3000;
 
 app.listen(PORT, () => {
 
