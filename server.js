@@ -16,6 +16,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/comments', async (req, res) => {
+
   const { url } = req.body;
 
   if (!url) {
@@ -27,6 +28,7 @@ app.post('/comments', async (req, res) => {
   let browser;
 
   try {
+
     browser = await chromium.launch({
       headless: true,
       args: [
@@ -35,34 +37,69 @@ app.post('/comments', async (req, res) => {
       ]
     });
 
-    const page = await browser.newPage();
-
-    await page.goto(url, {
-      waitUntil: 'networkidle',
-      timeout: 60000
+    const page = await browser.newPage({
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
     });
 
-    await page.waitForTimeout(5000);
+    await page.setViewportSize({
+      width: 1366,
+      height: 768
+    });
+
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: 90000
+    });
+
+    await page.waitForTimeout(7000);
+
+    try {
+      const button =
+        await page.$('text=Agora não');
+
+      if (button) {
+        await button.click();
+      }
+    } catch (e) {}
 
     for (let i = 0; i < 6; i++) {
       await page.mouse.wheel(0, 3000);
-      await page.waitForTimeout(1200);
+      await page.waitForTimeout(1500);
     }
 
     const comments = await page.evaluate(() => {
+
       const results = [];
 
       const elements =
-        document.querySelectorAll('ul ul');
+        document.querySelectorAll('article ul');
 
       elements.forEach(el => {
+
         const username =
           el.querySelector('h3')?.innerText;
 
-        const text =
-          el.querySelector('span')?.innerText;
+        const spans =
+          el.querySelectorAll('span');
 
-        if (username && text) {
+        let text = '';
+
+        spans.forEach(span => {
+
+          if (
+            span.innerText &&
+            span.innerText.length > text.length
+          ) {
+            text = span.innerText;
+          }
+        });
+
+        if (
+          username &&
+          text &&
+          text !== username
+        ) {
           results.push({
             username,
             text
@@ -73,6 +110,8 @@ app.post('/comments', async (req, res) => {
       return results;
     });
 
+    console.log(comments);
+
     await browser.close();
 
     return res.json({
@@ -81,11 +120,11 @@ app.post('/comments', async (req, res) => {
 
   } catch (err) {
 
+    console.error(err);
+
     if (browser) {
       await browser.close();
     }
-
-    console.error(err);
 
     return res.status(500).json({
       error: err.message
@@ -96,5 +135,7 @@ app.post('/comments', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(
+    `Servidor rodando na porta ${PORT}`
+  );
 });
