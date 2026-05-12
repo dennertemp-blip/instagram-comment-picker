@@ -71,6 +71,7 @@ app.post('/comments', async (req, res) => {
         ) {
 
           await button.click();
+
           console.log('Popup fechado');
 
           break;
@@ -78,18 +79,77 @@ app.post('/comments', async (req, res) => {
       }
 
     } catch (e) {
-      console.log('Nenhum popup encontrado');
+
+      console.log(
+        'Nenhum popup encontrado'
+      );
     }
 
-    // scroll para carregar comentários
-    for (let i = 0; i < 10; i++) {
+    // carrega mais comentários
+    for (let i = 0; i < 80; i++) {
 
-      await page.mouse.wheel(0, 4000);
+      try {
 
-      await page.waitForTimeout(2000);
+        const buttons = await page.$$('button');
 
-      console.log(`Scroll ${i + 1}`);
+        let clicked = false;
+
+        for (const button of buttons) {
+
+          const text =
+            await button.innerText();
+
+          if (
+            text.includes(
+              'Ver mais comentários'
+            ) ||
+            text.includes(
+              'View more comments'
+            ) ||
+            text.includes(
+              'Load more comments'
+            )
+          ) {
+
+            console.log(
+              'Carregando mais comentários'
+            );
+
+            await button.click();
+
+            clicked = true;
+
+            await page.waitForTimeout(2500);
+
+            break;
+          }
+        }
+
+        // scroll ajuda no lazy loading
+        await page.mouse.wheel(0, 5000);
+
+        await page.waitForTimeout(1500);
+
+        if (!clicked) {
+
+          console.log(
+            'Nenhum botão encontrado nesse ciclo'
+          );
+        }
+
+      } catch (e) {
+
+        console.log(
+          'Erro ao carregar comentários',
+          e
+        );
+      }
     }
+
+    console.log(
+      'Total spans:',
+      await page.locator('span').count()
+    );
 
     // DEBUG HTML
     const html = await page.content();
@@ -98,16 +158,18 @@ app.post('/comments', async (req, res) => {
 
     console.log(html.substring(0, 5000));
 
-    // captura textos possíveis
+    // captura comentários
     const comments = await page.evaluate(() => {
 
       const results = [];
 
-      const spans = document.querySelectorAll('span');
+      const spans =
+        document.querySelectorAll('span');
 
       spans.forEach(span => {
 
-        const text = span.innerText?.trim();
+        const text =
+          span.innerText?.trim();
 
         if (
           text &&
@@ -120,7 +182,9 @@ app.post('/comments', async (req, res) => {
           !text.includes('Following') &&
           !text.includes('Instagram') &&
           !text.includes('Meta') &&
-          !text.includes('Threads')
+          !text.includes('Threads') &&
+          !text.includes('Ver tradução') &&
+          !text.includes('See translation')
         ) {
 
           results.push({
@@ -141,13 +205,16 @@ app.post('/comments', async (req, res) => {
       return unique;
     });
 
-    console.log('Comentários encontrados:');
+    console.log(
+      'Comentários encontrados:'
+    );
 
     console.log(comments);
 
     await browser.close();
 
     return res.json({
+      total: comments.length,
       comments
     });
 
