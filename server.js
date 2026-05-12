@@ -47,6 +47,8 @@ app.post('/comments', async (req, res) => {
       height: 768
     });
 
+    console.log('Abrindo URL:', url);
+
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: 90000
@@ -54,61 +56,92 @@ app.post('/comments', async (req, res) => {
 
     await page.waitForTimeout(7000);
 
+    // tenta fechar popup/login wall
     try {
-      const button =
-        await page.$('text=Agora não');
 
-      if (button) {
-        await button.click();
+      const buttons = await page.$$('button');
+
+      for (const button of buttons) {
+
+        const text = await button.innerText();
+
+        if (
+          text.includes('Agora não') ||
+          text.includes('Not now')
+        ) {
+
+          await button.click();
+          console.log('Popup fechado');
+
+          break;
+        }
       }
-    } catch (e) {}
 
-    for (let i = 0; i < 6; i++) {
-      await page.mouse.wheel(0, 3000);
-      await page.waitForTimeout(1500);
+    } catch (e) {
+      console.log('Nenhum popup encontrado');
     }
 
+    // scroll para carregar comentários
+    for (let i = 0; i < 10; i++) {
+
+      await page.mouse.wheel(0, 4000);
+
+      await page.waitForTimeout(2000);
+
+      console.log(`Scroll ${i + 1}`);
+    }
+
+    // DEBUG HTML
+    const html = await page.content();
+
+    console.log('Página carregada');
+
+    console.log(html.substring(0, 5000));
+
+    // captura textos possíveis
     const comments = await page.evaluate(() => {
 
       const results = [];
 
-      const elements =
-        document.querySelectorAll('article ul');
+      const spans = document.querySelectorAll('span');
 
-      elements.forEach(el => {
+      spans.forEach(span => {
 
-        const username =
-          el.querySelector('h3')?.innerText;
-
-        const spans =
-          el.querySelectorAll('span');
-
-        let text = '';
-
-        spans.forEach(span => {
-
-          if (
-            span.innerText &&
-            span.innerText.length > text.length
-          ) {
-            text = span.innerText;
-          }
-        });
+        const text = span.innerText?.trim();
 
         if (
-          username &&
           text &&
-          text !== username
+          text.length > 3 &&
+          text.length < 300 &&
+          !text.includes('Curtir') &&
+          !text.includes('Reply') &&
+          !text.includes('Responder') &&
+          !text.includes('Seguir') &&
+          !text.includes('Following') &&
+          !text.includes('Instagram') &&
+          !text.includes('Meta') &&
+          !text.includes('Threads')
         ) {
+
           results.push({
-            username,
+            username: 'usuario',
             text
           });
         }
       });
 
-      return results;
+      // remove duplicados
+      const unique = results.filter(
+        (item, index, self) =>
+          index === self.findIndex(
+            t => t.text === item.text
+          )
+      );
+
+      return unique;
     });
+
+    console.log('Comentários encontrados:');
 
     console.log(comments);
 
@@ -119,6 +152,8 @@ app.post('/comments', async (req, res) => {
     });
 
   } catch (err) {
+
+    console.error('ERRO GERAL:');
 
     console.error(err);
 
@@ -135,6 +170,7 @@ app.post('/comments', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
+
   console.log(
     `Servidor rodando na porta ${PORT}`
   );
