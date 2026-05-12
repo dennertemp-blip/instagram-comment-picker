@@ -4,8 +4,16 @@ const { chromium } = require('playwright');
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST']
+}));
+
 app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.send('API ONLINE');
+});
 
 app.post('/comments', async (req, res) => {
   const { url } = req.body;
@@ -16,28 +24,36 @@ app.post('/comments', async (req, res) => {
     });
   }
 
-  const browser = await chromium.launch({
-    headless: true
-  });
-
-  const page = await browser.newPage();
+  let browser;
 
   try {
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox'
+      ]
+    });
+
+    const page = await browser.newPage();
+
     await page.goto(url, {
-      waitUntil: 'networkidle'
+      waitUntil: 'networkidle',
+      timeout: 60000
     });
 
     await page.waitForTimeout(5000);
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       await page.mouse.wheel(0, 3000);
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(1200);
     }
 
     const comments = await page.evaluate(() => {
       const results = [];
 
-      const elements = document.querySelectorAll('ul ul');
+      const elements =
+        document.querySelectorAll('ul ul');
 
       elements.forEach(el => {
         const username =
@@ -59,14 +75,19 @@ app.post('/comments', async (req, res) => {
 
     await browser.close();
 
-    res.json({
+    return res.json({
       comments
     });
 
   } catch (err) {
-    await browser.close();
 
-    res.status(500).json({
+    if (browser) {
+      await browser.close();
+    }
+
+    console.error(err);
+
+    return res.status(500).json({
       error: err.message
     });
   }
@@ -75,5 +96,5 @@ app.post('/comments', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log('Servidor rodando');
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
